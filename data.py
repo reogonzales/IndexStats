@@ -1,3 +1,4 @@
+import time
 import yfinance as yf
 import pandas as pd
 
@@ -10,10 +11,23 @@ TICKER_MAP = {
     "IWM": "IWM",
 }
 
+_RETRIES = 3
+_RETRY_DELAY = 3  # seconds
+
+
+def _retry(fn, *args, **kwargs):
+    for attempt in range(_RETRIES):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            if attempt == _RETRIES - 1:
+                raise
+            time.sleep(_RETRY_DELAY * (attempt + 1))
+
 
 def fetch_ohlc(index_label: str, period: str = "1y") -> pd.DataFrame:
     ticker = TICKER_MAP[index_label]
-    df = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+    df = _retry(yf.download, ticker, period=period, auto_adjust=True, progress=False)
     # Flatten MultiIndex columns that yfinance produces
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -58,9 +72,12 @@ def fetch_45day_ohlc(daily_df: pd.DataFrame) -> pd.DataFrame:
 def fetch_options_chain(index_label: str):
     ticker = TICKER_MAP[index_label]
     tk = yf.Ticker(ticker)
-    expirations = tk.options
-    if not expirations:
-        return None, None
-    nearest = expirations[0]
-    chain = tk.option_chain(nearest)
-    return chain.calls, chain.puts
+
+    def _fetch():
+        expirations = tk.options
+        if not expirations:
+            return None, None
+        chain = tk.option_chain(expirations[0])
+        return chain.calls, chain.puts
+
+    return _retry(_fetch)

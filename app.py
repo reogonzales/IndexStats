@@ -9,6 +9,16 @@ from metrics import percentile_table, compute_rsi, compute_macd
 from pricing import black_scholes, iv_rank, iv_percentile
 from projections import project_prices
 
+
+@st.cache_data(ttl=3600)
+def cached_fetch_ohlc(index_label):
+    return fetch_ohlc(index_label)
+
+
+@st.cache_data(ttl=3600)
+def cached_fetch_options_chain(index_label):
+    return fetch_options_chain(index_label)
+
 st.set_page_config(page_title="IndexStats", layout="wide")
 st.markdown(
     '<link rel="manifest" href="/app/static/manifest.json">',
@@ -26,11 +36,11 @@ with col2:
 
 if run:
     with st.spinner(f"Fetching data for {index_label}…"):
-        daily_df = fetch_ohlc(index_label)
+        daily_df = cached_fetch_ohlc(index_label)
         weekly_df = fetch_weekly_ohlc(daily_df)
         df_21day = fetch_21day_ohlc(daily_df)
         df_45day = fetch_45day_ohlc(daily_df)
-        calls_df, puts_df = fetch_options_chain(index_label)
+        calls_df, puts_df = cached_fetch_options_chain(index_label)
 
     current_price = float(daily_df["Close"].iloc[-1])
 
