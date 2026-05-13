@@ -21,7 +21,17 @@ def cached_fetch_options_chain(index_label):
 
 st.set_page_config(page_title="IndexStats", layout="wide")
 st.markdown(
-    '<link rel="manifest" href="/app/static/manifest.json">',
+    """
+    <link rel="manifest" href="/app/static/manifest.json">
+    <style>
+        /* Tighter side padding on small screens */
+        @media (max-width: 768px) {
+            .block-container { padding-left: 0.75rem; padding-right: 0.75rem; }
+        }
+        /* Horizontal scroll for wide tables on mobile */
+        .stDataFrame { overflow-x: auto; }
+    </style>
+    """,
     unsafe_allow_html=True,
 )
 st.title("IndexStats — Index Options Statistics")
@@ -97,7 +107,7 @@ if run:
     fig.update_yaxes(title_text="Price", row=1, col=1)
     fig.update_yaxes(title_text="RSI", range=[0, 100], row=2, col=1)
     fig.update_yaxes(title_text="MACD", row=3, col=1)
-    fig.update_layout(height=650, showlegend=False, margin=dict(t=40, b=20))
+    fig.update_layout(height=500, showlegend=False, margin=dict(t=40, b=20))
     st.plotly_chart(fig, use_container_width=True)
     st.divider()
 
@@ -129,17 +139,10 @@ if run:
         st.markdown(f"**{label} — Proj Price: ${proj_price:,.2f}**")
         st.dataframe(df.drop(columns=["Proj Price"]), use_container_width=True)
 
-    proj_row1_col1, proj_row1_col2 = st.columns(2)
-    with proj_row1_col1:
-        show_proj_table(tomorrow_df, "Tomorrow (daily)")
-    with proj_row1_col2:
-        show_proj_table(five_day_df, "5 Days Out (weekly)")
-
-    proj_row2_col1, proj_row2_col2 = st.columns(2)
-    with proj_row2_col1:
-        show_proj_table(day21_df, "21 Days Out")
-    with proj_row2_col2:
-        show_proj_table(day45_df, "45 Days Out")
+    show_proj_table(tomorrow_df, "Tomorrow (daily)")
+    show_proj_table(five_day_df, "5 Days Out (weekly)")
+    show_proj_table(day21_df, "21 Days Out")
+    show_proj_table(day45_df, "45 Days Out")
     st.divider()
 
     # ── IV & Options summary ──────────────────────────────────────────────────
@@ -159,11 +162,12 @@ if run:
         iv_series = calls_df["impliedVolatility"].dropna()
         iv_series = iv_series[iv_series > 0]
 
-        iv_col1, iv_col2, iv_col3, iv_col4 = st.columns(4)
+        iv_col1, iv_col2 = st.columns(2)
         with iv_col1:
             st.metric("ATM Strike", f"${float(atm_row['strike']):,.2f}")
         with iv_col2:
             st.metric("ATM IV (Chain)", f"{iv_from_chain * 100:.1f}%" if not np.isnan(iv_from_chain) else "N/A")
+        iv_col3, iv_col4 = st.columns(2)
         with iv_col3:
             ivr = iv_rank(iv_series) if len(iv_series) > 1 else float("nan")
             st.metric("IV Rank", f"{ivr:.1f}%" if not np.isnan(ivr) else "N/A")
