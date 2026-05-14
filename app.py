@@ -167,11 +167,6 @@ if run:
         st.markdown(f"**{label} — Proj Price: ${proj_price:,.2f} ({sign}{pct:.2f}%)**")
         st.dataframe(df.drop(columns=["Proj Price"]), use_container_width=True)
 
-    def price_n_days_ago(n):
-        target = pd.Timestamp(date.today() - timedelta(days=n))
-        past = daily_df[daily_df.index <= target]
-        return float(past["Close"].iloc[-1]) if not past.empty else current_price
-
     from datetime import date, timedelta
     today = date.today()
     # Next business day for Tomorrow
@@ -182,9 +177,9 @@ if run:
         tomorrow_date += timedelta(days=1)
 
     show_proj_table(tomorrow_df, f"Tomorrow ({tomorrow_date.strftime('%m/%d/%Y')})",          current_price)
-    show_proj_table(five_day_df, f"5 Days Out ({(today + timedelta(days=5)).strftime('%m/%d/%Y')})",   price_n_days_ago(5))
-    show_proj_table(day21_df,    f"21 Days Out ({(today + timedelta(days=21)).strftime('%m/%d/%Y')})", price_n_days_ago(21))
-    show_proj_table(day45_df,    f"45 Days Out ({(today + timedelta(days=45)).strftime('%m/%d/%Y')})", price_n_days_ago(45))
+    show_proj_table(five_day_df, f"5 Days Out ({(today + timedelta(days=5)).strftime('%m/%d/%Y')})",   current_price)
+    show_proj_table(day21_df,    f"21 Days Out ({(today + timedelta(days=21)).strftime('%m/%d/%Y')})", current_price)
+    show_proj_table(day45_df,    f"45 Days Out ({(today + timedelta(days=45)).strftime('%m/%d/%Y')})", current_price)
     st.divider()
 
     # ── IV & Options summary ──────────────────────────────────────────────────
