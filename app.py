@@ -4,20 +4,32 @@ import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from data import fetch_ohlc, fetch_weekly_ohlc, fetch_21day_ohlc, fetch_45day_ohlc, fetch_options_chain
+import data_yf
+import data_poly
 from metrics import percentile_table, compute_rsi, compute_macd
 from pricing import black_scholes, iv_rank, iv_percentile
 from projections import project_prices
 
 
 @st.cache_data(ttl=3600)
-def cached_fetch_ohlc(index_label):
-    return fetch_ohlc(index_label)
+def _fetch_ohlc_yf(index_label):
+    return data_yf.fetch_ohlc(index_label)
 
 
 @st.cache_data(ttl=3600)
-def cached_fetch_options_chain(index_label):
-    return fetch_options_chain(index_label)
+def _fetch_options_yf(index_label):
+    return data_yf.fetch_options_chain(index_label)
+
+
+@st.cache_data(ttl=3600)
+def _fetch_ohlc_poly(index_label):
+    return data_poly.fetch_ohlc(index_label)
+
+
+@st.cache_data(ttl=3600)
+def _fetch_options_poly(index_label):
+    return data_poly.fetch_options_chain(index_label)
+
 
 st.set_page_config(page_title="IndexStats", layout="wide")
 st.markdown(
@@ -36,23 +48,33 @@ st.markdown(
 )
 st.title("IndexStats — Index Options Statistics")
 
-col1, col2 = st.columns([2, 1])
+col1, col2, col3 = st.columns([2, 1, 1])
 with col1:
     index_label = st.selectbox("Select Index", ["SPX", "NDX", "RUT", "SPY", "QQQ", "IWM"])
 with col2:
+    source = st.radio("Data Source", ["Polygon.io", "yfinance"], horizontal=False)
+with col3:
     st.write("")
     st.write("")
     run = st.button("Calculate", type="primary", use_container_width=True)
 
+_use_polygon = (source == "Polygon.io")
+_ETF_PROXY = {"SPX": "SPY", "NDX": "QQQ", "RUT": "IWM"}
+
 if run:
+    if _use_polygon and index_label in _ETF_PROXY:
+        st.caption(f"Note: {index_label} uses {_ETF_PROXY[index_label]} (ETF proxy) — index data requires a paid Polygon plan.")
     with st.spinner(f"Fetching data for {index_label}…"):
-        daily_df = cached_fetch_ohlc(index_label)
-        weekly_df = fetch_weekly_ohlc(daily_df)
-        df_21day = fetch_21day_ohlc(daily_df)
-        df_45day = fetch_45day_ohlc(daily_df)
+        daily_df = _fetch_ohlc_poly(index_label) if _use_polygon else _fetch_ohlc_yf(index_label)
+        weekly_df = data_poly.fetch_weekly_ohlc(daily_df)
+        df_21day  = data_poly.fetch_21day_ohlc(daily_df)
+        df_45day  = data_poly.fetch_45day_ohlc(daily_df)
 
     try:
-        calls_df, puts_df = cached_fetch_options_chain(index_label)
+        calls_df, puts_df = (
+            _fetch_options_poly(index_label) if _use_polygon
+            else _fetch_options_yf(index_label)
+        )
     except Exception:
         calls_df, puts_df = None, None
 
