@@ -146,11 +146,28 @@ if run:
     )
     with st.expander("Metric definitions"):
         st.markdown(
-            "- **DHDC** = (Daily High − Daily Close) / Daily Close\n"
-            "- **DCDL** = (Daily Close − Daily Low) / Daily Close\n"
-            "- **WHWA** = (Weekly High − Weekly Avg) / Weekly Avg\n"
-            "- **WAWL** = (Weekly Avg − Weekly Low) / Weekly Avg\n"
-            "- Weekly Avg = mean of the week's daily closing prices"
+            "### Daily Metrics\n"
+            "- **DHDC** (Daily High − Daily Close) / Daily Close — how far the intraday high reached *above* the closing price. Always positive. Higher percentiles = larger upside wicks.\n"
+            "- **DCDL** (Daily Close − Daily Low) / Daily Close — how far the intraday low fell *below* the closing price. Displayed as negative (downside). Higher absolute percentiles = larger downside wicks.\n"
+            "- **Daily Performance** — day-over-day % change in closing price (close-to-close return). Negative values mean the day closed lower than the prior day.\n"
+            "\n"
+            "### Weekly Metrics\n"
+            "- **WHWA** (Weekly High − Weekly Avg) / Weekly Avg — how far the week's intraday high reached above the weekly average close. Always positive.\n"
+            "- **WAWL** (Weekly Avg − Weekly Low) / Weekly Avg — how far the week's intraday low fell below the weekly average close. Displayed as negative.\n"
+            "- **Weekly Avg** = mean of that week's daily closing prices (Monday–Friday), NOT (High + Low) / 2.\n"
+            "- **Weekly Performance** — week-over-week % change in the weekly closing price.\n"
+            "\n"
+            "### Percentile Table\n"
+            "- Percentiles shown: 10%, 20%, 40%, 50%, 60%, 70%, 80%, 90% — computed from 1 year of historical data.\n"
+            "- **10%** = only 10% of historical days had a value this low or lower (rare downside).\n"
+            "- **90%** = only 10% of historical days exceeded this value (rare upside).\n"
+            "- **50%** = median — half of historical days were above, half below.\n"
+            "\n"
+            "### Price Projections\n"
+            "- **Proj Price** = current price × (1 + median historical return for that period). Represents the most typical expected closing price if the period performs at its historical median.\n"
+            "- **Proj % Change** = (Proj Price − current price) / current price. How much price is projected to move from today's close to the target date.\n"
+            "- **Proj Range** = intraday low–high band. The row label (e.g. 10%/90%) means ~80% of historical periods had their intraday low stay above Proj Low AND their intraday high stay below Proj High.\n"
+            "- Ranges are computed from prior-close-relative returns: Low/prev Close − 1 and High/prev Close − 1.\n"
         )
     st.divider()
 
