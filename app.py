@@ -50,7 +50,11 @@ if run:
         weekly_df = fetch_weekly_ohlc(daily_df)
         df_21day = fetch_21day_ohlc(daily_df)
         df_45day = fetch_45day_ohlc(daily_df)
+
+    try:
         calls_df, puts_df = cached_fetch_options_chain(index_label)
+    except Exception:
+        calls_df, puts_df = None, None
 
     current_price = float(daily_df["Close"].iloc[-1])
 

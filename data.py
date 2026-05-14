@@ -1,5 +1,4 @@
 import time
-import requests
 import yfinance as yf
 import pandas as pd
 
@@ -15,23 +14,15 @@ TICKER_MAP = {
 _RETRIES = 4
 _RETRY_DELAY = 5  # seconds
 
-# Browser-like session to avoid Yahoo Finance rate limiting on cloud IPs
-_SESSION = requests.Session()
-_SESSION.headers.update({
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
-})
-
 
 def _retry(fn, *args, **kwargs):
     for attempt in range(_RETRIES):
         try:
-            return fn(*args, **kwargs)
+            result = fn(*args, **kwargs)
+            # yf.download swallows rate limit errors and returns empty DataFrame
+            if isinstance(result, pd.DataFrame) and result.empty:
+                raise RuntimeError("yfinance returned empty DataFrame (likely rate limited)")
+            return result
         except Exception as e:
             if attempt == _RETRIES - 1:
                 raise
@@ -40,10 +31,7 @@ def _retry(fn, *args, **kwargs):
 
 def fetch_ohlc(index_label: str, period: str = "1y") -> pd.DataFrame:
     ticker = TICKER_MAP[index_label]
-    df = _retry(
-        yf.download, ticker,
-        period=period, auto_adjust=True, progress=False, session=_SESSION,
-    )
+    df = _retry(yf.download, ticker, period=period, auto_adjust=True, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     df = df[["Open", "High", "Low", "Close"]].dropna()
@@ -83,7 +71,7 @@ def fetch_45day_ohlc(daily_df: pd.DataFrame) -> pd.DataFrame:
 
 def fetch_options_chain(index_label: str):
     ticker = TICKER_MAP[index_label]
-    tk = yf.Ticker(ticker, session=_SESSION)
+    tk = yf.Ticker(ticker)
 
     def _fetch():
         expirations = tk.options

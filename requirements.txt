@@ -5,3 +5,4 @@ numpy>=1.26
 scipy>=1.12
 plotly
 pillow>=10.0
+requests-cache>=1.2
