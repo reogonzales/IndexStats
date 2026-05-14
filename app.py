@@ -143,10 +143,19 @@ if run:
         st.markdown(f"**{label} — Proj Price: ${proj_price:,.2f}**")
         st.dataframe(df.drop(columns=["Proj Price"]), use_container_width=True)
 
-    show_proj_table(tomorrow_df, "Tomorrow (daily)")
-    show_proj_table(five_day_df, "5 Days Out (weekly)")
-    show_proj_table(day21_df, "21 Days Out")
-    show_proj_table(day45_df, "45 Days Out")
+    from datetime import date, timedelta
+    today = date.today()
+    # Next business day for Tomorrow
+    tomorrow_date = today + timedelta(days=1)
+    if tomorrow_date.weekday() == 5:
+        tomorrow_date += timedelta(days=2)
+    elif tomorrow_date.weekday() == 6:
+        tomorrow_date += timedelta(days=1)
+
+    show_proj_table(tomorrow_df, f"Tomorrow ({tomorrow_date.strftime('%m/%d/%Y')})")
+    show_proj_table(five_day_df, f"5 Days Out ({(today + timedelta(days=5)).strftime('%m/%d/%Y')})")
+    show_proj_table(day21_df,    f"21 Days Out ({(today + timedelta(days=21)).strftime('%m/%d/%Y')})")
+    show_proj_table(day45_df,    f"45 Days Out ({(today + timedelta(days=45)).strftime('%m/%d/%Y')})")
     st.divider()
 
     # ── IV & Options summary ──────────────────────────────────────────────────
