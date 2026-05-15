@@ -65,7 +65,10 @@ import backtest as _bt
 _bt_key = f"bt_updated_{index_label}"
 if _bt_key not in st.session_state:
     _daily_df_bt = _fetch_ohlc_poly(index_label) if _use_polygon else _fetch_ohlc_yf(index_label)
-    _bt.load_or_update_backtest(index_label, _daily_df_bt)
+    _bt.load_or_update_backtest(index_label, _daily_df_bt, period="daily", n_days=1)
+    _bt.load_or_update_backtest(index_label, _daily_df_bt, period="5d",    n_days=5)
+    _bt.load_or_update_backtest(index_label, _daily_df_bt, period="21d",   n_days=21)
+    _bt.load_or_update_backtest(index_label, _daily_df_bt, period="45d",   n_days=45)
     st.session_state[_bt_key] = True
 
 if run:
@@ -209,21 +212,18 @@ if run:
     st.divider()
 
     # ── Back Test Results ─────────────────────────────────────────────────────
-    import backtest as _bt
     st.subheader("Back Test Results")
-    with st.spinner("Loading backtest data…"):
-        bt_df = _bt.load_or_update_backtest(index_label, daily_df)
 
-    if bt_df.empty:
-        st.info("No backtest data yet — run again tomorrow.")
-    else:
+    def _show_bt_expander(bt_df, period_label):
+        if bt_df.empty:
+            return
         n = len(bt_df)
         h40 = int(bt_df["hit_4060"].sum())
         h30 = int(bt_df["hit_3070"].sum())
         h20 = int(bt_df["hit_2080"].sum())
         start_date = bt_df["Date"].min()
         bt_label = (
-            f"Daily ({n} rows, since {start_date})  "
+            f"{period_label} ({n} rows, since {start_date})  "
             f"**[40/60]**: {h40/n:.0%} ({h40}/{n})  "
             f"**[30/70]**: {h30/n:.0%} ({h30}/{n})  "
             f"**[20/80]**: {h20/n:.0%} ({h20}/{n})"
@@ -245,6 +245,17 @@ if run:
                 }),
                 use_container_width=True,
             )
+
+    with st.spinner("Loading backtest data…"):
+        bt_daily = _bt.load_or_update_backtest(index_label, daily_df, period="daily", n_days=1)
+        bt_5d    = _bt.load_or_update_backtest(index_label, daily_df, period="5d",    n_days=5)
+        bt_21d   = _bt.load_or_update_backtest(index_label, daily_df, period="21d",   n_days=21)
+        bt_45d   = _bt.load_or_update_backtest(index_label, daily_df, period="45d",   n_days=45)
+
+    _show_bt_expander(bt_daily, "Daily")
+    _show_bt_expander(bt_5d,    "5-Day")
+    _show_bt_expander(bt_21d,   "21-Day")
+    _show_bt_expander(bt_45d,   "45-Day")
     st.divider()
 
     # ── IV & Options summary ──────────────────────────────────────────────────
