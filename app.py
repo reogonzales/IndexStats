@@ -201,6 +201,31 @@ if run:
     show_proj_table(day45_df,    f"45 Days Out ({(today + timedelta(days=45)).strftime('%m/%d/%Y')})", current_price)
     st.divider()
 
+    # ── Back Test Results ─────────────────────────────────────────────────────
+    import backtest as _bt
+    st.subheader("Back Test Results")
+    with st.spinner("Loading backtest data…"):
+        bt_df = _bt.load_or_update_backtest(index_label, daily_df)
+
+    if bt_df.empty:
+        st.info("No backtest data yet — run again tomorrow.")
+    else:
+        display_bt = (
+            bt_df.sort_values("Date", ascending=False)
+                 .rename(columns={"%": "Proj Err %"})
+                 .reset_index(drop=True)
+        )
+        with st.expander(f"Daily ({len(display_bt)} rows, since 2026-01-01)", expanded=False):
+            st.dataframe(
+                display_bt.style.format({
+                    "Close Price": "${:,.2f}",
+                    "Proj Price":  "${:,.2f}",
+                    "Proj Err %":  "{:+.2f}%",
+                }),
+                use_container_width=True,
+            )
+    st.divider()
+
     # ── IV & Options summary ──────────────────────────────────────────────────
     st.subheader("Implied Volatility & Options Summary")
 
