@@ -223,10 +223,10 @@ if run:
         h20 = int(bt_df["hit_2080"].sum())
         start_date = bt_df["Date"].min()
         bt_label = (
-            f"{period_label} ({n} rows, since {start_date})  "
-            f"**[40/60]**: {h40/n:.0%} ({h40}/{n})  "
-            f"**[30/70]**: {h30/n:.0%} ({h30}/{n})  "
-            f"**[20/80]**: {h20/n:.0%} ({h20}/{n})"
+            f"{period_label} ({n} rows, since {start_date})  "
+            f"**:blue[[40/60]]**: {h40/n:.0%} ({h40}/{n})    "
+            f"**:blue[[30/70]]**: {h30/n:.0%} ({h30}/{n})    "
+            f"**:blue[[20/80]]**: {h20/n:.0%} ({h20}/{n})"
         )
         _HIT_COLS = ["hit_4060", "hit_3070", "hit_2080"]
         display_bt = (
