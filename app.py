@@ -214,7 +214,7 @@ if run:
     # ── Back Test Results ─────────────────────────────────────────────────────
     st.subheader("Back Test Results")
 
-    def _show_bt_expander(bt_df, period_label):
+    def _show_bt_expander(bt_df, period_label, max_rows=10):
         if bt_df.empty:
             return
         n = len(bt_df)
@@ -233,7 +233,7 @@ if run:
             bt_df.sort_values("Date", ascending=False)
                  .drop(columns=_HIT_COLS)
                  .rename(columns={"%": "Proj Err %"})
-                 .head(10)
+                 .head(max_rows)
                  .reset_index(drop=True)
         )
         with st.expander(bt_label, expanded=False):
@@ -252,10 +252,10 @@ if run:
         bt_21d   = _bt.load_or_update_backtest(index_label, daily_df, period="21d",   n_days=21)
         bt_45d   = _bt.load_or_update_backtest(index_label, daily_df, period="45d",   n_days=45)
 
-    _show_bt_expander(bt_daily, "Daily")
-    _show_bt_expander(bt_5d,    "5-Day")
-    _show_bt_expander(bt_21d,   "21-Day")
-    _show_bt_expander(bt_45d,   "45-Day")
+    _show_bt_expander(bt_daily, "Daily",   max_rows=10)
+    _show_bt_expander(bt_5d,    "5-Day",   max_rows=10)
+    _show_bt_expander(bt_21d,   "21-Day",  max_rows=30)
+    _show_bt_expander(bt_45d,   "45-Day",  max_rows=60)
     st.divider()
 
     # ── IV & Options summary ──────────────────────────────────────────────────
