@@ -181,9 +181,10 @@ if run:
         proj_price = float(df["Proj Price"].iloc[0])
         pct = (proj_price / base_price - 1) * 100
         sign = "+" if pct >= 0 else ""
-        st.markdown(f"**{label} — Proj Price: ${proj_price:,.2f} ({sign}{pct:.2f}%)**")
-        st.caption(f"Current Price: ${base_price:,.2f}")
-        st.dataframe(df.drop(columns=["Proj Price"]), use_container_width=True)
+        header = f"{label} — Proj Price: ${proj_price:,.2f} ({sign}{pct:.2f}%)"
+        with st.expander(header, expanded=False):
+            st.caption(f"Current Price: ${base_price:,.2f}")
+            st.dataframe(df.drop(columns=["Proj Price"]), use_container_width=True)
 
     from datetime import date, timedelta
     today = date.today()

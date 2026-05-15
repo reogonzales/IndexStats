@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-PAIRS = [(10, 90), (20, 80), (40, 60), (50, 50)]
+PAIRS = [(10, 90), (20, 80), (30, 70), (40, 60), (50, 50)]
 
 
 def _make_projection_df(current_price, low_return, high_return, perf):
