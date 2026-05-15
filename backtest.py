@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-BACKTEST_START = pd.Timestamp("2026-01-01")
 _DATA_DIR = Path(__file__).parent
+_REQUIRED_COLS = {"Proj Range [40/60]", "hit_4060", "hit_3070", "hit_2080"}
 
 
 def _csv_path(index_label: str) -> Path:
@@ -26,10 +26,14 @@ def _compute_row(daily_df: pd.DataFrame, loc: int) -> dict:
     actual_close = float(actual["Close"])
     pct = (proj_price - actual_close) / proj_price * 100
 
-    def fmt_range(p_low, p_high):
+    def proj_bounds(p_low, p_high):
         lo = prev_close * (1 + float(np.percentile(low_ret,  p_low)))
         hi = prev_close * (1 + float(np.percentile(high_ret, p_high)))
-        return f"${lo:,.2f} − ${hi:,.2f}"
+        return lo, hi
+
+    lo40, hi60 = proj_bounds(40, 60)
+    lo30, hi70 = proj_bounds(30, 70)
+    lo20, hi80 = proj_bounds(20, 80)
 
     d = daily_df.index[loc]
     return {
@@ -38,18 +42,30 @@ def _compute_row(daily_df: pd.DataFrame, loc: int) -> dict:
         "Proj Price":         proj_price,
         "%":                  pct,
         "Day Low - Day Hi":   f"${float(actual['Low']):,.2f} − ${float(actual['High']):,.2f}",
-        "Proj Range [30/70]": fmt_range(30, 70),
-        "Proj Range [20/80]": fmt_range(20, 80),
+        "Proj Range [40/60]": f"${lo40:,.2f} − ${hi60:,.2f}",
+        "Proj Range [30/70]": f"${lo30:,.2f} − ${hi70:,.2f}",
+        "Proj Range [20/80]": f"${lo20:,.2f} − ${hi80:,.2f}",
+        "hit_4060":           int(lo40 <= actual_close <= hi60),
+        "hit_3070":           int(lo30 <= actual_close <= hi70),
+        "hit_2080":           int(lo20 <= actual_close <= hi80),
     }
 
 
 def load_or_update_backtest(index_label: str, daily_df: pd.DataFrame) -> pd.DataFrame:
     csv = _csv_path(index_label)
-    existing = pd.read_csv(csv) if csv.exists() else pd.DataFrame()
+    if csv.exists():
+        existing = pd.read_csv(csv)
+        if not _REQUIRED_COLS.issubset(existing.columns):
+            csv.unlink()
+            existing = pd.DataFrame()
+    else:
+        existing = pd.DataFrame()
+
     existing_dates = set(existing["Date"]) if not existing.empty else set()
 
+    backtest_start = (pd.Timestamp.today() - pd.Timedelta(days=365)).normalize()
     yesterday = (pd.Timestamp.today() - pd.Timedelta(days=1)).normalize()
-    target_dates = daily_df.loc[BACKTEST_START:yesterday].index
+    target_dates = daily_df.loc[backtest_start:yesterday].index
 
     new_rows = []
     for d in target_dates:

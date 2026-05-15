@@ -61,6 +61,13 @@ with col3:
 _use_polygon = (source == "Polygon.io")
 _ETF_PROXY = {"SPX": "SPY", "NDX": "QQQ", "RUT": "IWM"}
 
+import backtest as _bt
+_bt_key = f"bt_updated_{index_label}"
+if _bt_key not in st.session_state:
+    _daily_df_bt = _fetch_ohlc_poly(index_label) if _use_polygon else _fetch_ohlc_yf(index_label)
+    _bt.load_or_update_backtest(index_label, _daily_df_bt)
+    st.session_state[_bt_key] = True
+
 if run:
     if _use_polygon and index_label in _ETF_PROXY:
         st.caption(f"Note: {index_label} uses {_ETF_PROXY[index_label]} (ETF proxy) — index data requires a paid Polygon plan.")
@@ -210,12 +217,26 @@ if run:
     if bt_df.empty:
         st.info("No backtest data yet — run again tomorrow.")
     else:
+        n = len(bt_df)
+        h40 = int(bt_df["hit_4060"].sum())
+        h30 = int(bt_df["hit_3070"].sum())
+        h20 = int(bt_df["hit_2080"].sum())
+        start_date = bt_df["Date"].min()
+        bt_label = (
+            f"Daily ({n} rows, since {start_date})  "
+            f"**[40/60]**: {h40/n:.0%} ({h40}/{n})  "
+            f"**[30/70]**: {h30/n:.0%} ({h30}/{n})  "
+            f"**[20/80]**: {h20/n:.0%} ({h20}/{n})"
+        )
+        _HIT_COLS = ["hit_4060", "hit_3070", "hit_2080"]
         display_bt = (
             bt_df.sort_values("Date", ascending=False)
+                 .drop(columns=_HIT_COLS)
                  .rename(columns={"%": "Proj Err %"})
+                 .head(10)
                  .reset_index(drop=True)
         )
-        with st.expander(f"Daily ({len(display_bt)} rows, since 2026-01-01)", expanded=False):
+        with st.expander(bt_label, expanded=False):
             st.dataframe(
                 display_bt.style.format({
                     "Close Price": "${:,.2f}",
