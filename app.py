@@ -236,6 +236,44 @@ if run:
                  .head(max_rows)
                  .reset_index(drop=True)
         )
+
+        def _parse_rng(s):
+            parts = str(s).replace("$", "").replace(",", "").split(" − ")
+            return float(parts[0]), float(parts[1])
+
+        def _miss(close, rng_str):
+            try:
+                lo, hi = _parse_rng(rng_str)
+                if close < lo:
+                    return f"-${lo - close:,.2f}"
+                elif close > hi:
+                    return f"+${close - hi:,.2f}"
+                return "$0.00"
+            except Exception:
+                return ""
+
+        _RNG_PAIRS = [
+            ("Proj Range [40/60]", "Miss [40/60]"),
+            ("Proj Range [30/70]", "Miss [30/70]"),
+            ("Proj Range [20/80]", "Miss [20/80]"),
+        ]
+        for rng_col, miss_col in _RNG_PAIRS:
+            if rng_col in display_bt.columns:
+                display_bt[miss_col] = display_bt.apply(
+                    lambda row, rc=rng_col: _miss(row["Close Price"], row[rc]), axis=1
+                )
+
+        _miss_set = {mc for _, mc in _RNG_PAIRS}
+        ordered = []
+        for col in display_bt.columns:
+            if col in _miss_set:
+                continue
+            ordered.append(col)
+            for rng_col, miss_col in _RNG_PAIRS:
+                if col == rng_col and miss_col in display_bt.columns:
+                    ordered.append(miss_col)
+        display_bt = display_bt[ordered]
+
         with st.expander(bt_label, expanded=False):
             st.dataframe(
                 display_bt.style.format({
