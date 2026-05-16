@@ -122,13 +122,13 @@ def load_or_update_backtest(
     min_lookback = _MIN_LOOKBACK.get(period, 20)
 
     backtest_start = (pd.Timestamp.today() - pd.Timedelta(days=365)).normalize()
-    yesterday      = (pd.Timestamp.today() - pd.Timedelta(days=1)).normalize()
+    through_date   = pd.Timestamp.today().normalize()
 
     new_rows = []
 
     if n_days == 1:
         # Daily: iterate over outcome dates directly
-        for d in daily_df.loc[backtest_start:yesterday].index:
+        for d in daily_df.loc[backtest_start:through_date].index:
             if d.date().isoformat() in existing_dates:
                 continue
             loc = daily_df.index.get_loc(d)
@@ -140,7 +140,7 @@ def load_or_update_backtest(
         n_total = len(daily_df)
         for loc_pred in range(n_total - n_days):
             outcome_date = daily_df.index[loc_pred + n_days]
-            if outcome_date < backtest_start or outcome_date > yesterday:
+            if outcome_date < backtest_start or outcome_date > through_date:
                 continue
             if outcome_date.date().isoformat() in existing_dates:
                 continue
