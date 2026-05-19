@@ -9,6 +9,8 @@ import data_poly
 from metrics import percentile_table, compute_rsi, compute_macd
 from pricing import black_scholes, iv_rank, iv_percentile
 from projections import project_prices
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
 
 @st.cache_data(ttl=3600)
@@ -106,6 +108,16 @@ if run:
         st.caption(f"Note: {index_label} uses {_ETF_PROXY[index_label]} (ETF proxy) — index data requires a paid Polygon plan.")
     with st.spinner(f"Fetching data for {index_label}…"):
         daily_df = _fetch_ohlc_poly(index_label) if _use_polygon else _fetch_ohlc_yf(index_label)
+
+        _et_now = datetime.now(ZoneInfo("America/New_York"))
+        _trading_day_in_progress = (
+            _et_now.weekday() < 5
+            and _et_now.time() < time(16, 0)
+            and daily_df.index[-1].date() == _et_now.date()
+        )
+        if _trading_day_in_progress:
+            daily_df = daily_df.iloc[:-1]
+
         weekly_df = data_poly.fetch_weekly_ohlc(daily_df)
         df_21day  = data_poly.fetch_21day_ohlc(daily_df)
         df_45day  = data_poly.fetch_45day_ohlc(daily_df)
@@ -126,7 +138,8 @@ if run:
     bt_45d   = _bt.load_or_update_backtest(index_label, daily_df, period="45d",   n_days=45)
 
     # ── Current price header ─────────────────────────────────────────────────
-    st.metric("Current Price", f"${current_price:,.2f}")
+    _price_label = "Prior Close Price" if _trading_day_in_progress else "Current Price"
+    st.metric(_price_label, f"${current_price:,.2f}")
 
     # ── Price + RSI + MACD chart ──────────────────────────────────────────────
     rsi = compute_rsi(daily_df["Close"])
@@ -138,9 +151,6 @@ if run:
         row_heights=[0.55, 0.22, 0.23],
         vertical_spacing=0.03,
         subplot_titles=("Price", "RSI (14)", "MACD (12, 26, 9)"),
-        specs=[[{"secondary_y": False}],
-               [{"secondary_y": True}],
-               [{"secondary_y": False}]],
     )
 
     # Price
@@ -158,28 +168,6 @@ if run:
     )
     fig.add_hline(y=70, line_dash="dash", line_color="red", line_width=1, row=2, col=1)
     fig.add_hline(y=30, line_dash="dash", line_color="green", line_width=1, row=2, col=1)
-
-    # Miss overlays on RSI (secondary y-axis, daily backtest)
-    if not bt_daily.empty:
-        _bt_miss = _compute_miss_cols(bt_daily)
-        _bt_miss = _bt_miss.copy()
-        _bt_miss["_dt"] = pd.to_datetime(_bt_miss["Date"])
-        _miss_colors = {
-            "Miss [40/60]": "#AB47BC",
-            "Miss [30/70]": "#42A5F5",
-            "Miss [20/80]": "#66BB6A",
-        }
-        for miss_col, color in _miss_colors.items():
-            if miss_col in _bt_miss.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=_bt_miss["_dt"], y=_bt_miss[miss_col],
-                        name=miss_col, line=dict(color=color, width=1),
-                        opacity=0.7,
-                    ),
-                    row=2, col=1, secondary_y=True,
-                )
-        fig.update_yaxes(title_text="Miss ($)", secondary_y=True, row=2, col=1, showgrid=False)
 
     # MACD line + signal
     fig.add_trace(
@@ -265,7 +253,11 @@ if run:
     elif tomorrow_date.weekday() == 6:
         tomorrow_date += timedelta(days=1)
 
-    show_proj_table(tomorrow_df, f"Tomorrow ({tomorrow_date.strftime('%m/%d/%Y')})",          current_price)
+    if _trading_day_in_progress:
+        _tomorrow_label = f"({today.strftime('%m/%d/%Y')})"
+    else:
+        _tomorrow_label = f"Tomorrow ({tomorrow_date.strftime('%m/%d/%Y')})"
+    show_proj_table(tomorrow_df, _tomorrow_label, current_price)
     show_proj_table(five_day_df, f"5 Days Out ({(today + timedelta(days=5)).strftime('%m/%d/%Y')})",   current_price)
     show_proj_table(day21_df,    f"21 Days Out ({(today + timedelta(days=21)).strftime('%m/%d/%Y')})", current_price)
     show_proj_table(day45_df,    f"45 Days Out ({(today + timedelta(days=45)).strftime('%m/%d/%Y')})", current_price)
@@ -273,6 +265,29 @@ if run:
 
     # ── Back Test Results ─────────────────────────────────────────────────────
     st.subheader("Back Test Results")
+
+    def _show_miss_chart(bt_df):
+        if bt_df.empty:
+            return
+        miss_df = _compute_miss_cols(bt_df).copy()
+        miss_df["_dt"] = pd.to_datetime(miss_df["Date"])
+        miss_df = miss_df.sort_values("_dt")
+        _miss_colors = {
+            "Miss [40/60]": "#AB47BC",
+            "Miss [30/70]": "#42A5F5",
+            "Miss [20/80]": "#66BB6A",
+        }
+        mfig = go.Figure()
+        for miss_col, color in _miss_colors.items():
+            if miss_col in miss_df.columns:
+                mfig.add_trace(go.Scatter(
+                    x=miss_df["_dt"], y=miss_df[miss_col],
+                    name=miss_col, line=dict(color=color, width=1.5),
+                ))
+        mfig.add_hline(y=0, line_dash="dot", line_color="white", line_width=1)
+        mfig.update_yaxes(title_text="Miss ($)")
+        mfig.update_layout(height=220, showlegend=True, margin=dict(t=10, b=20, l=60, r=20))
+        st.plotly_chart(mfig, use_container_width=True)
 
     def _show_bt_tab(bt_df):
         if bt_df.empty:
@@ -289,6 +304,7 @@ if run:
             f"**:blue[[30/70]]**: {h30/n:.0%} ({h30}/{n}) &nbsp; "
             f"**:blue[[20/80]]**: {h20/n:.0%} ({h20}/{n})"
         )
+        _show_miss_chart(bt_df)
 
         _HIT_COLS = ["hit_4060", "hit_3070", "hit_2080"]
         display_bt = (
