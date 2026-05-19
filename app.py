@@ -363,11 +363,15 @@ if run:
         iv_series = calls_df["impliedVolatility"].dropna()
         iv_series = iv_series[iv_series > 0]
 
-        iv_col1, iv_col2 = st.columns(2)
+        _expiry = str(calls_df["expiration_date"].iloc[0]) if "expiration_date" in calls_df.columns else "N/A"
+
+        iv_col1, iv_col2, iv_col5 = st.columns(3)
         with iv_col1:
             st.metric("ATM Strike", f"${float(atm_row['strike']):,.2f}")
         with iv_col2:
             st.metric("ATM IV (Chain)", f"{iv_from_chain * 100:.1f}%" if not np.isnan(iv_from_chain) else "N/A")
+        with iv_col5:
+            st.metric("Nearest Expiry", _expiry)
         iv_col3, iv_col4 = st.columns(2)
         with iv_col3:
             ivr = iv_rank(iv_series) if len(iv_series) > 1 else float("nan")
@@ -378,8 +382,8 @@ if run:
 
         st.markdown(f"**ATM Black-Scholes Call Price** (≈30 days, r=5%): **${atm_bs_price:,.2f}**")
 
-        with st.expander("Full options chain (calls)"):
-            display_cols = [c for c in ["strike", "bid", "ask", "impliedVolatility",
+        with st.expander(f"Full options chain — Expiry: {_expiry}"):
+            display_cols = [c for c in ["expiration_date", "strike", "bid", "ask", "impliedVolatility",
                                         "openInterest", "volume"] if c in calls_df.columns]
             st.dataframe(calls_df[display_cols].reset_index(drop=True), use_container_width=True)
     else:

@@ -77,6 +77,10 @@ def fetch_options_chain(index_label: str):
         if not expirations:
             return None, None
         chain = tk.option_chain(expirations[0])
-        return chain.calls, chain.puts
+        calls = chain.calls.copy()
+        puts  = chain.puts.copy()
+        calls["expiration_date"] = expirations[0]
+        puts["expiration_date"]  = expirations[0]
+        return calls, puts
 
     return _retry(_fetch)

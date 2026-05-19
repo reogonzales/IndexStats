@@ -120,6 +120,7 @@ def fetch_options_chain(index_label: str):
         g = s.greeks
         q = s.day
         rows.append({
+            "expiration_date":   nearest_expiry,
             "strike":            d.strike_price if d else None,
             "option_type":       d.contract_type if d else None,
             "bid":               s.last_quote.bid if s.last_quote else None,
