@@ -31,6 +31,36 @@ def _fetch_options_poly(index_label):
     return data_poly.fetch_options_chain(index_label)
 
 
+_RNG_PAIRS = [
+    ("Proj Range [40/60]", "Miss [40/60]"),
+    ("Proj Range [30/70]", "Miss [30/70]"),
+    ("Proj Range [20/80]", "Miss [20/80]"),
+]
+
+
+def _parse_miss_val(close, rng_str):
+    try:
+        parts = str(rng_str).replace("$", "").replace(",", "").split(" − ")
+        lo, hi = float(parts[0]), float(parts[1])
+        if close < lo:
+            return -(lo - close)
+        elif close > hi:
+            return close - hi
+        return 0.0
+    except Exception:
+        return 0.0
+
+
+def _compute_miss_cols(df):
+    df = df.copy()
+    for rng_col, miss_col in _RNG_PAIRS:
+        if rng_col in df.columns:
+            df[miss_col] = df.apply(
+                lambda row, rc=rng_col: _parse_miss_val(row["Close Price"], row[rc]), axis=1
+            )
+    return df
+
+
 st.set_page_config(page_title="IndexStats", layout="wide")
 st.markdown(
     """
@@ -90,6 +120,11 @@ if run:
 
     current_price = float(daily_df["Close"].iloc[-1])
 
+    bt_daily = _bt.load_or_update_backtest(index_label, daily_df, period="daily", n_days=1)
+    bt_5d    = _bt.load_or_update_backtest(index_label, daily_df, period="5d",    n_days=5)
+    bt_21d   = _bt.load_or_update_backtest(index_label, daily_df, period="21d",   n_days=21)
+    bt_45d   = _bt.load_or_update_backtest(index_label, daily_df, period="45d",   n_days=45)
+
     # ── Current price header ─────────────────────────────────────────────────
     st.metric("Current Price", f"${current_price:,.2f}")
 
@@ -103,6 +138,9 @@ if run:
         row_heights=[0.55, 0.22, 0.23],
         vertical_spacing=0.03,
         subplot_titles=("Price", "RSI (14)", "MACD (12, 26, 9)"),
+        specs=[[{"secondary_y": False}],
+               [{"secondary_y": True}],
+               [{"secondary_y": False}]],
     )
 
     # Price
@@ -120,6 +158,28 @@ if run:
     )
     fig.add_hline(y=70, line_dash="dash", line_color="red", line_width=1, row=2, col=1)
     fig.add_hline(y=30, line_dash="dash", line_color="green", line_width=1, row=2, col=1)
+
+    # Miss overlays on RSI (secondary y-axis, daily backtest)
+    if not bt_daily.empty:
+        _bt_miss = _compute_miss_cols(bt_daily)
+        _bt_miss = _bt_miss.copy()
+        _bt_miss["_dt"] = pd.to_datetime(_bt_miss["Date"])
+        _miss_colors = {
+            "Miss [40/60]": "#AB47BC",
+            "Miss [30/70]": "#42A5F5",
+            "Miss [20/80]": "#66BB6A",
+        }
+        for miss_col, color in _miss_colors.items():
+            if miss_col in _bt_miss.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=_bt_miss["_dt"], y=_bt_miss[miss_col],
+                        name=miss_col, line=dict(color=color, width=1),
+                        opacity=0.7,
+                    ),
+                    row=2, col=1, secondary_y=True,
+                )
+        fig.update_yaxes(title_text="Miss ($)", secondary_y=True, row=2, col=1, showgrid=False)
 
     # MACD line + signal
     fig.add_trace(
@@ -214,54 +274,34 @@ if run:
     # ── Back Test Results ─────────────────────────────────────────────────────
     st.subheader("Back Test Results")
 
-    def _show_bt_expander(bt_df, period_label, max_rows=10):
+    def _show_bt_tab(bt_df):
         if bt_df.empty:
+            st.info("No backtest data available.")
             return
         n = len(bt_df)
         h40 = int(bt_df["hit_4060"].sum())
         h30 = int(bt_df["hit_3070"].sum())
         h20 = int(bt_df["hit_2080"].sum())
         start_date = bt_df["Date"].min()
-        bt_label = (
-            f"{period_label} ({n} rows, since {start_date})  "
-            f"**:blue[[40/60]]**: {h40/n:.0%} ({h40}/{n})    "
-            f"**:blue[[30/70]]**: {h30/n:.0%} ({h30}/{n})    "
+        st.markdown(
+            f"**{n} rows, since {start_date}** — "
+            f"**:blue[[40/60]]**: {h40/n:.0%} ({h40}/{n}) &nbsp; "
+            f"**:blue[[30/70]]**: {h30/n:.0%} ({h30}/{n}) &nbsp; "
             f"**:blue[[20/80]]**: {h20/n:.0%} ({h20}/{n})"
         )
+
         _HIT_COLS = ["hit_4060", "hit_3070", "hit_2080"]
         display_bt = (
             bt_df.sort_values("Date", ascending=False)
                  .drop(columns=_HIT_COLS)
                  .rename(columns={"%": "Proj Err %"})
-                 .head(max_rows)
                  .reset_index(drop=True)
         )
 
-        def _parse_rng(s):
-            parts = str(s).replace("$", "").replace(",", "").split(" − ")
-            return float(parts[0]), float(parts[1])
-
-        def _miss(close, rng_str):
-            try:
-                lo, hi = _parse_rng(rng_str)
-                if close < lo:
-                    return f"-${lo - close:,.2f}"
-                elif close > hi:
-                    return f"+${close - hi:,.2f}"
-                return "$0.00"
-            except Exception:
-                return ""
-
-        _RNG_PAIRS = [
-            ("Proj Range [40/60]", "Miss [40/60]"),
-            ("Proj Range [30/70]", "Miss [30/70]"),
-            ("Proj Range [20/80]", "Miss [20/80]"),
-        ]
-        for rng_col, miss_col in _RNG_PAIRS:
-            if rng_col in display_bt.columns:
-                display_bt[miss_col] = display_bt.apply(
-                    lambda row, rc=rng_col: _miss(row["Close Price"], row[rc]), axis=1
-                )
+        display_bt = _compute_miss_cols(display_bt)
+        for _, miss_col in _RNG_PAIRS:
+            if miss_col in display_bt.columns:
+                display_bt[miss_col] = display_bt[miss_col].apply(lambda v: f"${v:+,.2f}")
 
         _miss_set = {mc for _, mc in _RNG_PAIRS}
         ordered = []
@@ -274,26 +314,20 @@ if run:
                     ordered.append(miss_col)
         display_bt = display_bt[ordered]
 
-        with st.expander(bt_label, expanded=False):
-            st.dataframe(
-                display_bt.style.format({
-                    "Close Price": "${:,.2f}",
-                    "Proj Price":  "${:,.2f}",
-                    "Proj Err %":  "{:+.2f}%",
-                }),
-                use_container_width=True,
-            )
+        st.dataframe(
+            display_bt.style.format({
+                "Close Price": "${:,.2f}",
+                "Proj Price":  "${:,.2f}",
+                "Proj Err %":  "{:+.2f}%",
+            }),
+            use_container_width=True,
+        )
 
-    with st.spinner("Loading backtest data…"):
-        bt_daily = _bt.load_or_update_backtest(index_label, daily_df, period="daily", n_days=1)
-        bt_5d    = _bt.load_or_update_backtest(index_label, daily_df, period="5d",    n_days=5)
-        bt_21d   = _bt.load_or_update_backtest(index_label, daily_df, period="21d",   n_days=21)
-        bt_45d   = _bt.load_or_update_backtest(index_label, daily_df, period="45d",   n_days=45)
-
-    _show_bt_expander(bt_daily, "Daily",   max_rows=10)
-    _show_bt_expander(bt_5d,    "5-Day",   max_rows=10)
-    _show_bt_expander(bt_21d,   "21-Day",  max_rows=30)
-    _show_bt_expander(bt_45d,   "45-Day",  max_rows=60)
+    tab_daily, tab_5d, tab_21d, tab_45d = st.tabs(["Daily", "5-Day", "21-Day", "45-Day"])
+    with tab_daily: _show_bt_tab(bt_daily)
+    with tab_5d:    _show_bt_tab(bt_5d)
+    with tab_21d:   _show_bt_tab(bt_21d)
+    with tab_45d:   _show_bt_tab(bt_45d)
     st.divider()
 
     # ── IV & Options summary ──────────────────────────────────────────────────
