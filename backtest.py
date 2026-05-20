@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
+from datetime import time
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 _DATA_DIR = Path(__file__).parent
 _REQUIRED_COLS = {"Proj Range [40/60]", "hit_4060", "hit_3070", "hit_2080"}
@@ -118,11 +120,27 @@ def load_or_update_backtest(
     else:
         existing = pd.DataFrame()
 
+    et_now = pd.Timestamp.now(tz=ZoneInfo("America/New_York"))
+    today_str = et_now.normalize().date().isoformat()
+    market_open = (
+        et_now.weekday() < 5
+        and et_now.time() < time(16, 0)
+        and (not daily_df.empty and daily_df.index[-1].date().isoformat() == today_str)
+    )
+
+    # Always drop today's row — recompute with final close if market closed, or exclude if still open
+    if not existing.empty:
+        existing = existing[existing["Date"] != today_str]
+
     existing_dates = set(existing["Date"]) if not existing.empty else set()
     min_lookback = _MIN_LOOKBACK.get(period, 20)
 
     backtest_start = (pd.Timestamp.today() - pd.Timedelta(days=365)).normalize()
-    through_date   = pd.Timestamp.today().normalize()
+    through_date = (
+        pd.Timestamp.today().normalize() - pd.Timedelta(days=1)
+        if market_open
+        else pd.Timestamp.today().normalize()
+    )
 
     new_rows = []
 
