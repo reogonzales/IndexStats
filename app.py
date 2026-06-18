@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -8,7 +9,7 @@ import data_yf
 import data_poly
 from metrics import percentile_table, compute_rsi, compute_macd
 from pricing import black_scholes, iv_rank, iv_percentile
-from projections import project_prices
+from projections import project_prices, compute_tomorrow_probabilities
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
@@ -31,6 +32,11 @@ def _fetch_ohlc_poly(index_label):
 @st.cache_data(ttl=3600)
 def _fetch_options_poly(index_label):
     return data_poly.fetch_options_chain(index_label)
+
+
+@st.cache_data(ttl=3600)
+def _fetch_vix_yf():
+    return data_yf.fetch_vix()
 
 
 _RNG_PAIRS = [
@@ -257,7 +263,88 @@ if run:
         _tomorrow_label = f"({today.strftime('%m/%d/%Y')})"
     else:
         _tomorrow_label = f"Tomorrow ({tomorrow_date.strftime('%m/%d/%Y')})"
-    show_proj_table(tomorrow_df, _tomorrow_label, current_price)
+    # ── Tomorrow projection (inline expander with probability analysis) ──
+    _t_proj_price = float(tomorrow_df["Proj Price"].iloc[0])
+    _t_pct = (_t_proj_price / current_price - 1) * 100
+    _t_sign = "+" if _t_pct >= 0 else ""
+    with st.expander(f"{_tomorrow_label} — Proj Price: ${_t_proj_price:,.2f} ({_t_sign}{_t_pct:.2f}%)", expanded=False):
+        st.caption(f"Current Price: ${current_price:,.2f}")
+        st.dataframe(tomorrow_df.drop(columns=["Proj Price"]), use_container_width=True)
+
+        st.markdown("---")
+        st.markdown("#### Tomorrow Probability Analysis")
+
+        try:
+            vix_close = _fetch_vix_yf()
+            vix_available = True
+        except Exception:
+            vix_close = float("nan")
+            vix_available = False
+
+        prob = compute_tomorrow_probabilities(current_price, daily_df, vix_close)
+
+        slen = prob["streak_len"]
+        spct = prob["streak_pct"]
+        if slen == 0:
+            st.caption("No current streak.")
+        else:
+            direction_word = "up" if slen > 0 else "down"
+            arrow = "↑" if slen > 0 else "↓"
+            sign_str = f"+{spct:.2f}%" if spct >= 0 else f"{spct:.2f}%"
+            st.markdown(
+                f"**Current streak:** {abs(slen)} consecutive {direction_word} "
+                f"day{'s' if abs(slen) > 1 else ''} {arrow} &nbsp; cumulative: **{sign_str}**"
+            )
+
+        def _fmt_range(center, delta):
+            if math.isnan(delta):
+                return "N/A"
+            return f"${center - delta:,.2f} – ${center + delta:,.2f}"
+
+        def _fmt_pct(p):
+            return "N/A" if math.isnan(p) else f"±{p:.2f}%"
+
+        def _fmt_hit(h):
+            return "N/A" if math.isnan(h) else f"{h:.1%}"
+
+        sigma_rows = [
+            {
+                "Source":       "Hist. Vol (20d)",
+                "1σ Range":     _fmt_range(current_price, prob["hist_1sd_dollar"]),
+                "1σ ±%":        _fmt_pct(prob["hist_1sd_pct"]),
+                "1σ Hit Rate":  _fmt_hit(prob["hist_hit_1sd"]),
+                "2σ Range":     _fmt_range(current_price, prob["hist_2sd_dollar"]),
+                "2σ ±%":        _fmt_pct(prob["hist_2sd_pct"]),
+                "2σ Hit Rate":  _fmt_hit(prob["hist_hit_2sd"]),
+            },
+            {
+                "Source":       f"VIX-implied ({vix_close:.2f})" if vix_available else "VIX-implied (unavailable)",
+                "1σ Range":     _fmt_range(current_price, prob["vix_1sd_dollar"]) if vix_available else "N/A",
+                "1σ ±%":        _fmt_pct(prob["vix_1sd_pct"]) if vix_available else "N/A",
+                "1σ Hit Rate":  "—",
+                "2σ Range":     _fmt_range(current_price, prob["vix_2sd_dollar"]) if vix_available else "N/A",
+                "2σ ±%":        _fmt_pct(prob["vix_2sd_pct"]) if vix_available else "N/A",
+                "2σ Hit Rate":  "—",
+            },
+        ]
+        st.dataframe(pd.DataFrame(sigma_rows).set_index("Source"), use_container_width=True)
+        st.caption(f"Hit rates based on {prob['hist_sample_n']} historical returns.")
+
+        st.markdown("##### Conditional Probabilities")
+        if slen == 0:
+            st.caption("No streak — conditional analysis not applicable.")
+        elif prob["cond_n"] < 10:
+            st.caption(f"Insufficient historical instances (n={prob['cond_n']}) to compute reliable conditional stats.")
+        else:
+            direction_word = "up" if slen > 0 else "down"
+            cond_rows = [{
+                "Condition":      f"After a {direction_word} day (n={prob['cond_n']})",
+                "P(up tomorrow)": f"{prob['cond_p_up']:.1%}" if prob["cond_p_up"] is not None else "N/A",
+                "P(within 1σ)":   f"{prob['cond_p_within_1sd']:.1%}" if prob["cond_p_within_1sd"] is not None else "N/A",
+                "P(within 2σ)":   f"{prob['cond_p_within_2sd']:.1%}" if prob["cond_p_within_2sd"] is not None else "N/A",
+            }]
+            st.dataframe(pd.DataFrame(cond_rows).set_index("Condition"), use_container_width=True)
+
     show_proj_table(five_day_df, f"5 Days Out ({(today + timedelta(days=5)).strftime('%m/%d/%Y')})",   current_price)
     show_proj_table(day21_df,    f"21 Days Out ({(today + timedelta(days=21)).strftime('%m/%d/%Y')})", current_price)
     show_proj_table(day45_df,    f"45 Days Out ({(today + timedelta(days=45)).strftime('%m/%d/%Y')})", current_price)

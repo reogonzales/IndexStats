@@ -38,6 +38,16 @@ def fetch_ohlc(index_label: str, period: str = "1y") -> pd.DataFrame:
     return df
 
 
+def fetch_vix(period: str = "1y") -> float:
+    df = _retry(yf.download, "^VIX", period=period, auto_adjust=True, progress=False)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    df = df[["Close"]].dropna()
+    if df.empty:
+        raise RuntimeError("VIX data unavailable")
+    return float(df["Close"].iloc[-1])
+
+
 def fetch_weekly_ohlc(daily_df: pd.DataFrame) -> pd.DataFrame:
     return daily_df.resample("W").agg(
         Open=("Open", "first"),

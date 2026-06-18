@@ -35,6 +35,24 @@ def compute_rsi(close: pd.Series, period: int = 14) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 
+def compute_streak(daily_df: pd.DataFrame) -> tuple[int, float]:
+    returns = daily_df["Close"].pct_change().dropna()
+    if returns.empty:
+        return (0, 0.0)
+    last_ret = float(returns.iloc[-1])
+    if last_ret == 0.0:
+        return (0, 0.0)
+    direction = 1 if last_ret > 0 else -1
+    count = 0
+    for r in reversed(returns.values):
+        if r == 0.0 or (1 if r > 0 else -1) != direction:
+            break
+        count += 1
+    streak_slice = returns.iloc[-count:]
+    total_pct = float(((1 + streak_slice).prod() - 1) * 100)
+    return (direction * count, total_pct)
+
+
 def percentile_table(daily_df: pd.DataFrame, weekly_df: pd.DataFrame) -> pd.DataFrame:
     dhdc, dcdl = compute_daily_metrics(daily_df)
     whwa, wawl = compute_weekly_metrics(weekly_df)
